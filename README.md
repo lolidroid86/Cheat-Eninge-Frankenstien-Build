@@ -81,6 +81,34 @@ They are **not** included here because they are either (a) built from the [DBKKe
 
 ---
 
+## Example Script
+
+See [`examples/frankenstein_example.CEA`](examples/frankenstein_example.CEA) for a complete working script demonstrating all four new commands together — AOBSCANFUNCTION, HOOK/UNHOOK, and `{$ifdef CPU64}/{$else}/{$endif}` — in a realistic invincibility hook pattern.
+
+---
+
+## Troubleshooting
+
+**CE crashes or fails to load on startup**
+- Run as Administrator. The DBK kernel driver requires elevation — without it CE exits silently or crashes before the main window appears.
+
+**`dbk64.sys` failed to load / driver error on first run**
+- Secure Boot or driver signature enforcement may be blocking the driver. Either disable Secure Boot in BIOS or enable test signing: `bcdedit /set testsigning on` (requires reboot). Note: test signing is not needed if you use the signed driver from a CE 7.7 install.
+
+**`lazbuild` not found when building from source**
+- Add Lazarus to your PATH: `$env:PATH += ";C:\lazarus"` — or use the full path `C:\lazarus\lazbuild.exe` as shown in BUILDING.md.
+
+**Patch fails to apply (`git apply` error)**
+- Make sure you're applying against CE 7.5 HEAD (`ec45d5f4`). Later commits may have context drift. Use `git apply --3way patches/autoassembler.patch` for a best-effort merge.
+
+**HOOK() throws "no module found for address"**
+- `HOOK` requires the target address to be in an already-loaded module. Make sure the process is attached and the module is loaded before running the script.
+
+**`{$ifdef}` / `{$else}` blocks not behaving correctly**
+- Directives are case-insensitive but must be on their own line with no leading spaces before the `{`. Inline use (e.g., `mov eax, 1 {$ifdef CPU64}`) is not supported.
+
+---
+
 ## Contributors
 
 | Contributor | Role |

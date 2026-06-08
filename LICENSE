@@ -1,0 +1,44 @@
+Cheat Engine Frankenstein Build
+================================
+
+This repository contains:
+
+1. Source patches for Cheat Engine 7.5 (public source)
+2. An Inno Setup installer script
+3. Extension scripts (AITools, extensions_loader)
+4. Documentation
+
+---------------------------------------------------------------------------
+CHEAT ENGINE ORIGINAL LICENSE
+---------------------------------------------------------------------------
+
+Cheat Engine is copyright © dark_byte. All rights reserved.
+
+Cheat Engine is released as freeware. You are not allowed to redistribute
+it for monetary gain. You are allowed to include Cheat Engine's
+functionality in your project as long as that project is not a commercial
+project and you give credit where credit is due.
+
+The DBK kernel driver (dbk64.sys / dbk32.sys / dbk64.cepack / dbk32.cepack)
+is copyright © dark_byte and is redistributed here solely for personal,
+non-commercial use in accordance with the above terms. It remains the
+exclusive property of dark_byte.
+
+---------------------------------------------------------------------------
+THIS REPOSITORY'S PATCHES AND SCRIPTS
+---------------------------------------------------------------------------
+
+The patches, installer script, extension files, and documentation authored
+in this repository are released under the same non-commercial terms as
+Cheat Engine itself:
+
+  - Free for personal, non-commercial use
+  - Redistribution for monetary gain is not permitted
+  - Credit must be given to the original authors (see CONTRIBUTORS.md)
+
+---------------------------------------------------------------------------
+NO WARRANTY
+---------------------------------------------------------------------------
+
+This software is provided "as is", without warranty of any kind. The
+authors accept no liability for any damage caused by its use.

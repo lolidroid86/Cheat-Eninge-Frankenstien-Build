@@ -1,0 +1,59 @@
+{ Cheat Engine Frankenstein Build — Example Script
+  Demonstrates all four backported AA commands:
+    - {$ifdef}/{$else}/{$endif}  conditional compilation
+    - AOBSCANFUNCTION             scoped AOB scan near a known symbol
+    - HOOK / UNHOOK               automatic hook + original-bytes stub
+
+  This example patches a hypothetical "TakeDamage" function to make the
+  player invincible. Adapt the AOB pattern and symbol name for your target.
+
+  USAGE:
+    1. Attach CE to your target process
+    2. Open Auto-Assembler (Ctrl+Alt+A)
+    3. Paste this script and click Execute
+}
+
+[ENABLE]
+
+{ ---- Step 1: Find TakeDamage using AOBSCANFUNCTION ----
+  Scans within ~64 KB of the symbol "Player::TakeDamage" for the byte
+  pattern. Much faster and less collision-prone than a full module scan. }
+
+AOBSCANFUNCTION(TakeDamage_addr, Player::TakeDamage, 48 89 5C 24 ?? 57 48 83 EC 20)
+
+{ ---- Step 2: Allocate the hook cave ---- }
+
+alloc(TakeDamage_hook, 256, TakeDamage_addr)
+label(original_bytes)
+label(returnaddr)
+
+{ ---- Step 3: Write the hook cave ----
+  Use {$ifdef CPU64} / {$else} / {$endif} so the same script works on
+  both 32-bit and 64-bit targets without editing. }
+
+TakeDamage_hook:
+  {$ifdef CPU64}
+    { 64-bit: preserve registers, zero out damage argument (rcx = this, rdx = damage) }
+    push rax
+    xor edx, edx           { damage = 0 }
+    pop rax
+    jmp original_bytes
+  {$else}
+    { 32-bit: damage is on the stack (typically [esp+8]) }
+    mov dword ptr [esp+8], 0
+    jmp original_bytes
+  {$endif}
+
+{ ---- Step 4: Install the hook ----
+  HOOK writes a JMP at TakeDamage_addr, saves the overwritten bytes into
+  original_bytes, and appends a JMP back to the instruction after the hook. }
+
+HOOK(TakeDamage_addr, TakeDamage_hook, original_bytes)
+
+[DISABLE]
+
+{ UNHOOK restores the original bytes that HOOK saved.
+  The dealloc frees the cave allocation. }
+
+UNHOOK(TakeDamage_addr)
+dealloc(TakeDamage_hook)

@@ -87,11 +87,26 @@ If you don't have a CE 7.7 install you can build `dbk64.sys` yourself:
 1. Install Visual Studio 2022 + WDK (Windows Driver Kit)
 2. Open `DBKKernel\DBKKernel.sln`
 3. Build `Release x64` → produces `dbk64.sys`
-4. Run `cepack\cepack.exe -c dbk64.sys Cheat Engine\bin\dbk64.cepack`
+4. Build `cepack` (see below), then run:
+   ```powershell
+   cepack\cepack.exe -c dbk64.sys "Cheat Engine\bin\dbk64.cepack"
+   ```
 
 Repeat for `dbk32.sys` (build `Release Win32`).
 
 The other DLLs (allochook, vehdebug, winhook, luaclient, tcc) are built as part of the full CE Patreon source; they are not available from the public repo.
+
+### Building cepack
+
+`cepack` is a small Lazarus tool in the CE source that packs/unpacks `.cepack` files. You need it to produce `dbk64.cepack` from the compiled `dbk64.sys`. Build it once before packing the driver:
+
+```powershell
+$lazbuild = "C:\lazarus\lazbuild.exe"
+& $lazbuild "Cheat Engine\cepack\cepack.lpr"
+# Output: Cheat Engine\cepack\cepack.exe
+```
+
+Once built, `cepack -c infile outfile` compresses, `cepack -x infile outfile` extracts.
 
 ---
 
