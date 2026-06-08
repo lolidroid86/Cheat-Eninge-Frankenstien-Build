@@ -1,0 +1,21 @@
+# Build artifacts
+installer_output/
+*.exe
+*.dll
+*.sys
+*.cepack
+*.dat
+*.img
+*.sig
+
+# Lazarus/FPC build output
+lib/
+*.ppu
+*.o
+*.a
+*.compiled
+*.dbg
+
+# OS
+.DS_Store
+Thumbs.db

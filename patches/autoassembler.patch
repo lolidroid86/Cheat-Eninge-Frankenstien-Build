@@ -1,0 +1,394 @@
+diff --git a/Cheat Engine/autoassembler.pas b/Cheat Engine/autoassembler.pas
+index e94bbd6b..7d3ace1c 100755
+--- a/Cheat Engine/autoassembler.pas	
++++ b/Cheat Engine/autoassembler.pas	
+@@ -1263,6 +1263,60 @@ begin
+         code[i]:='DEFINE('+s1+', 00000000)';
+ 
+     end;
++
++    if uppercase(copy(currentline,1,16))='AOBSCANFUNCTION(' then //AOBSCANFUNCTION(varname, functionname, aob)
++    begin
++      a:=pos('(',currentline);
++      b:=pos(',',currentline);
++      c:=PosEx(',',currentline,b+1);
++      d:=pos(')',currentline);
++
++      if (a>0) and (b>0) and (c>0) and (d>0) then
++      begin
++        s1:=trim(copy(currentline,a+1,b-a-1));
++        s2:=trim(copy(currentline,b+1,c-b-1));
++        s3:=trim(copy(currentline,c+1,d-c-1));
++        //s1=varname  s2=functionname  s3=aob
++
++        if (not syntaxcheckonly) then
++        begin
++          startaddress:=symhandler.getAddressFromName(s2);
++          // Scan a window around the function start.
++          // 65536 bytes is a conservative upper bound for most functions.
++          stopaddress:=startaddress + 65536;
++
++          m:=-1;
++          for j:=0 to length(aobscanmodules)-1 do
++          begin
++            if (startaddress=aobscanmodules[j].minaddress) and (stopaddress=aobscanmodules[j].maxaddress) then
++            begin
++              m:=j;
++              break;
++            end;
++          end;
++
++          if m=-1 then
++          begin
++            setlength(aobscanmodules, length(aobscanmodules)+1);
++            m:=length(aobscanmodules)-1;
++            aobscanmodules[m].name:='<FUNC:'+uppercase(s2)+'>';
++            aobscanmodules[m].minaddress:=startaddress;
++            aobscanmodules[m].maxaddress:=stopaddress;
++            setlength(aobscanmodules[m].entries,0);
++          end;
++
++          j:=length(aobscanmodules[m].entries);
++          setlength(aobscanmodules[m].entries, j+1);
++          aobscanmodules[m].entries[j].name:=s1;
++          aobscanmodules[m].entries[j].aobstring:=s3;
++          aobscanmodules[m].entries[j].linenumber:=i;
++        end
++        else
++          code[i]:='DEFINE('+s1+', 00000000)';
++
++      end else raise exception.Create('Wrong syntax. AOBSCANFUNCTION(varname, functionname, 11 22 33)');
++    end;
++
+   end;
+   //do simultaneous scans for the selected modules
+ 
+@@ -1496,6 +1550,132 @@ end;
+ 
+ var nextaaid: longint;
+ 
++type
++  THookInfoRec = record
++    hookaddr: ptrUint;
++    origcodename: string;
++    codesize: integer;
++    origbyteshex: string;
++  end;
++
++var
++  hookInfoList: array of THookInfoRec;
++
++procedure processAAIfdefBlocks(code: TStrings; is64bit: boolean);
++// Preprocesses {$ifdef SYMBOL}/{$ifndef SYMBOL}/{$endif} directives in AA scripts.
++// Blanks lines inside conditionally-excluded blocks. Runs before aobscans so
++// that excluded AOBSCAN lines are also skipped.
++// NOTE: pre-scans DEFINE() lines for user symbols; a DEFINE inside a skipped
++// block will still be seen (limitation, acceptable for typical usage).
++const
++  MAXNEST = 64;
++var
++  i, a, b, skipDepth, nskip: integer;
++  currentline, sym: string;
++  definedNames: TStringList;
++  skipStack: array[0..MAXNEST-1] of boolean;
++begin
++  definedNames := TStringList.Create;
++  try
++    definedNames.CaseSensitive := false;
++
++    // Built-in platform defines
++    {$ifdef windows}
++    definedNames.Add('WINDOWS');
++    {$endif}
++    if is64bit then
++    begin
++      definedNames.Add('CPU64');
++      definedNames.Add('WIN64');
++    end else begin
++      definedNames.Add('CPU32');
++      definedNames.Add('WIN32');
++    end;
++
++    // Pre-scan for user DEFINE(name, ...) to collect symbol names
++    for i := 0 to code.Count-1 do
++    begin
++      currentline := uppercase(trim(code[i]));
++      if copy(currentline, 1, 7) = 'DEFINE(' then
++      begin
++        a := pos('(', currentline);
++        b := pos(',', currentline);
++        if (a > 0) and (b > 0) then
++          definedNames.Add(trim(copy(currentline, a+1, b-a-1)));
++      end;
++    end;
++
++    FillChar(skipStack, SizeOf(skipStack), 0);
++    skipDepth := 0;
++    nskip := 0;
++
++    i := 0;
++    while i < code.Count do
++    begin
++      currentline := uppercase(trim(code[i]));
++
++      if currentline = '{$ENDIF}' then
++      begin
++        if skipDepth > 0 then
++        begin
++          if skipStack[skipDepth] then dec(nskip);
++          dec(skipDepth);
++        end;
++        code[i] := '';
++        inc(i);
++        continue;
++      end;
++
++      if copy(currentline, 1, 8) = '{$IFDEF ' then
++      begin
++        if skipDepth < MAXNEST-1 then
++        begin
++          inc(skipDepth);
++          sym := trim(copy(currentline, 9, length(currentline)-9));
++          if (length(sym) > 0) and (sym[length(sym)] = '}') then
++            sym := trim(copy(sym, 1, length(sym)-1));
++          if (nskip > 0) or (definedNames.IndexOf(sym) < 0) then
++          begin
++            skipStack[skipDepth] := true;
++            inc(nskip);
++          end else
++            skipStack[skipDepth] := false;
++        end;
++        code[i] := '';
++        inc(i);
++        continue;
++      end;
++
++      if copy(currentline, 1, 9) = '{$IFNDEF ' then
++      begin
++        if skipDepth < MAXNEST-1 then
++        begin
++          inc(skipDepth);
++          sym := trim(copy(currentline, 10, length(currentline)-10));
++          if (length(sym) > 0) and (sym[length(sym)] = '}') then
++            sym := trim(copy(sym, 1, length(sym)-1));
++          if (nskip > 0) or (definedNames.IndexOf(sym) >= 0) then
++          begin
++            skipStack[skipDepth] := true;
++            inc(nskip);
++          end else
++            skipStack[skipDepth] := false;
++        end;
++        code[i] := '';
++        inc(i);
++        continue;
++      end;
++
++      if nskip > 0 then
++        code[i] := '';
++
++      inc(i);
++    end;
++  finally
++    definedNames.Free;
++  end;
++end;
++
+ function autoassemble2(code: tstrings;popupmessages: boolean;syntaxcheckonly:boolean; targetself: boolean; disableinfo: TDisableInfo=nil; memrec: TMemoryRecord=nil):boolean;
+ {
+ registeredsymbols is a stringlist that is initialized by the caller as case insensitive and no duplicates
+@@ -1598,6 +1778,8 @@ var i: integer=0;
+     varsize: integer=0;
+     tokens: tstringlist=nil;
+     baseaddress: ptrUint=0;
++    hookorigbytes: string='';
++    hookcodesize: integer=0;
+ 
+     multilineinjection: tstringlist=nil;
+     include: tstringlist=nil;
+@@ -1937,6 +2119,8 @@ begin
+     removecomments(code);  //also trims each line
+     unlabeledlabels(code);
+ 
++    processAAIfdefBlocks(code, processhandler.is64Bit or targetself);
++
+     if not strictmode then
+       getPotentialLabels(code, potentiallabels);
+ 
+@@ -2843,6 +3027,177 @@ begin
+           end;
+ 
+ 
++          // Hook(hookaddr, destaddr, origcodename)
++          // Generates hook jmp at hookaddr, saves original bytes to origcodename alloc,
++          // writes original instruction + jmp-back at origcodename.
++          if uppercase(copy(currentline,1,5))='HOOK(' then
++          begin
++            a:=pos('(',currentline);
++            b:=pos(',',currentline);
++            c:=PosEx(',',currentline,b+1);
++            d:=pos(')',currentline);
++            if (a>0) and (b>0) and (c>0) and (d>0) then
++            begin
++              s1:=trim(copy(currentline,a+1,b-a-1)); //hookaddr
++              s2:=trim(copy(currentline,b+1,c-b-1)); //destaddr
++              s3:=trim(copy(currentline,c+1,d-c-1)); //origcodename
++              if not syntaxcheckonly then
++              begin
++                testptr:=getAddressFromScript(s1);
++                if testptr=0 then raise Exception.Create('HOOK: could not resolve hook address: '+s1);
++                if processhandler.is64Bit then varsize:=14 else varsize:=5;
++                diff:=varsize; // save jmpsize before varsize is reused
++                multilineinjection:=TStringList.Create;
++                try
++                  x:=testptr;
++                  while x-testptr < ptrUint(varsize) do
++                    GetOriginalInstruction(x, multilineinjection, processhandler.is64Bit, true);
++                  hookcodesize:=integer(x-testptr);
++
++                  // Read original bytes to store
++                  setlength(bytes, hookcodesize);
++                  ReadProcessMemory(processhandle, pointer(testptr), @bytes[0], hookcodesize, x);
++                  hookorigbytes:='';
++                  for k:=0 to hookcodesize-1 do
++                    hookorigbytes:=hookorigbytes+inttohex(bytes[k],2)+' ';
++                  hookorigbytes:=trim(hookorigbytes);
++                finally
++                  freeandnil(multilineinjection);
++                end;
++
++                // Update or add hook info in global list
++                k:=-1;
++                for j:=0 to length(hookInfoList)-1 do
++                  if hookInfoList[j].hookaddr=testptr then begin k:=j; break; end;
++                if k<0 then
++                begin
++                  setlength(hookInfoList, length(hookInfoList)+1);
++                  k:=length(hookInfoList)-1;
++                end;
++                hookInfoList[k].hookaddr:=testptr;
++                hookInfoList[k].origcodename:=s3;
++                hookInfoList[k].codesize:=hookcodesize;
++                hookInfoList[k].origbyteshex:=hookorigbytes;
++
++                // Add origcodename to allocs (near hookaddr so jmp back is short)
++                varsize:=length(s3);
++                j:=0;
++                while (j<length(allocs)) and (length(allocs[j].varname)>varsize) do inc(j);
++                setlength(allocs,length(allocs)+1);
++                for k:=length(allocs)-1 downto j+1 do allocs[k]:=allocs[k-1];
++                allocs[j].varname:=s3;
++                allocs[j].size:=hookcodesize+16;
++                allocs[j].prefered:=testptr;
++                if SystemSupportsWritableExecutableMemory then
++                  allocs[j].protection:=PAGE_EXECUTE_READWRITE
++                else
++                  allocs[j].protection:=PAGE_EXECUTE_READ;
++
++                // Replace Hook() assemblerline with origcodename: (sets assembly cursor)
++                assemblerlines[length(assemblerlines)-1].line:=s3+':';
++
++                // db original bytes at origcode location
++                setlength(assemblerlines,length(assemblerlines)+1);
++                assemblerlines[length(assemblerlines)-1].linenr:=currentlinenr;
++                assemblerlines[length(assemblerlines)-1].line:='db '+hookorigbytes;
++
++                // jmp back past the hook in original code flow
++                setlength(assemblerlines,length(assemblerlines)+1);
++                assemblerlines[length(assemblerlines)-1].linenr:=currentlinenr;
++                assemblerlines[length(assemblerlines)-1].line:='jmp '+inttohex(testptr+hookcodesize,16);
++
++                // Set cursor to hookaddr and write hook jump
++                setlength(assemblerlines,length(assemblerlines)+1);
++                assemblerlines[length(assemblerlines)-1].linenr:=currentlinenr;
++                assemblerlines[length(assemblerlines)-1].line:=inttohex(testptr,16)+':';
++
++                setlength(assemblerlines,length(assemblerlines)+1);
++                assemblerlines[length(assemblerlines)-1].linenr:=currentlinenr;
++                if processhandler.is64Bit then
++                  assemblerlines[length(assemblerlines)-1].line:='jmp far '+s2
++                else
++                  assemblerlines[length(assemblerlines)-1].line:='jmp '+s2;
++
++                // nop padding if original code covered more than the jmp size
++                if hookcodesize>integer(diff) then
++                begin
++                  setlength(assemblerlines,length(assemblerlines)+1);
++                  assemblerlines[length(assemblerlines)-1].linenr:=currentlinenr;
++                  if hookcodesize-integer(diff)>1 then
++                    assemblerlines[length(assemblerlines)-1].line:='nop '+inttohex(hookcodesize-integer(diff),1)
++                  else
++                    assemblerlines[length(assemblerlines)-1].line:='nop';
++                end;
++
++                // Auto-register origcodename symbol
++                setlength(addsymbollist,length(addsymbollist)+1);
++                addsymbollist[length(addsymbollist)-1]:=s3;
++                if disableinfo<>nil then
++                  disableinfo.registeredsymbols.Add(s3);
++              end else begin
++                // Syntax check: register origcodename as a dummy alloc
++                varsize:=length(s3);
++                j:=0;
++                while (j<length(allocs)) and (length(allocs[j].varname)>varsize) do inc(j);
++                setlength(allocs,length(allocs)+1);
++                for k:=length(allocs)-1 downto j+1 do allocs[k]:=allocs[k-1];
++                allocs[j].varname:=s3;
++                allocs[j].size:=32;
++                allocs[j].prefered:=0;
++                allocs[j].protection:=PAGE_EXECUTE_READWRITE;
++                setlength(addsymbollist,length(addsymbollist)+1);
++                addsymbollist[length(addsymbollist)-1]:=s3;
++                if disableinfo<>nil then disableinfo.registeredsymbols.Add(s3);
++                setlength(assemblerlines,length(assemblerlines)-1);
++              end;
++              continue;
++            end else raise Exception.Create('Wrong syntax. Hook(hookaddr,destaddr,origcodename)');
++          end;
++
++          // UNHOOK(hookaddr)
++          // Restores original bytes saved by Hook() and marks origcode for dealloc.
++          if uppercase(copy(currentline,1,7))='UNHOOK(' then
++          begin
++            a:=pos('(',currentline);
++            b:=pos(')',currentline);
++            if (a>0) and (b>0) then
++            begin
++              s1:=trim(copy(currentline,a+1,b-a-1)); //hookaddr
++              if not syntaxcheckonly then
++              begin
++                testptr:=getAddressFromScript(s1);
++                // Find stored hook info
++                k:=-1;
++                for j:=0 to length(hookInfoList)-1 do
++                  if hookInfoList[j].hookaddr=testptr then begin k:=j; break; end;
++                if k<0 then
++                  raise Exception.Create('UNHOOK: no Hook() info for address '+s1+'. Make sure [ENABLE] ran first.');
++
++                s3:=hookInfoList[k].origcodename;
++                hookorigbytes:=hookInfoList[k].origbyteshex;
++
++                // Replace UNHOOK() line: restore original bytes at hookaddr
++                assemblerlines[length(assemblerlines)-1].line:=inttohex(testptr,16)+':';
++
++                setlength(assemblerlines,length(assemblerlines)+1);
++                assemblerlines[length(assemblerlines)-1].linenr:=currentlinenr;
++                assemblerlines[length(assemblerlines)-1].line:='db '+hookorigbytes;
++
++                // Also add origcodename alloc to the dealloc list (free the alloc)
++                if disableinfo<>nil then
++                  for j:=0 to length(disableinfo.allocs)-1 do
++                    if uppercase(disableinfo.allocs[j].varname)=uppercase(s3) then
++                    begin
++                      setlength(dealloc,length(dealloc)+1);
++                      dealloc[length(dealloc)-1]:=disableinfo.allocs[j].address;
++                      break;
++                    end;
++              end else
++                setlength(assemblerlines,length(assemblerlines)-1);
++              continue;
++            end else raise Exception.Create('Wrong syntax. UNHOOK(hookaddr)');
++          end;
++
+           //replace ALLOC identifiers with values so the assemble error check doesnt crash on that
+           if processhandler.is64bit then
+           begin
