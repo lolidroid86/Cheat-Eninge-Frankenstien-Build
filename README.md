@@ -23,12 +23,13 @@ See [CHANGES.md](CHANGES.md) for full syntax, examples, and implementation notes
 
 ---
 
-## Quick Start (pre-built installer)
+## Quick Start (build your own installer)
 
-1. Download `CheatEngine_Frankenstein_Setup.exe` from [Releases](../../releases)
-2. Run as Administrator
-3. Optionally tick "Create desktop shortcut" and "Associate .CT files"
-4. Launch **Cheat Engine Frankenstein** from the Start Menu or desktop
+No pre-built installer is distributed here — see [BUILDING.md](BUILDING.md) for the full walkthrough. Once built:
+
+1. Run `CheatEngine_Frankenstein_Setup.exe` as Administrator
+2. Optionally tick "Create desktop shortcut" and "Associate .CT files"
+3. Launch **Cheat Engine Frankenstein** from the Start Menu or desktop
 
 > The installer bundles `dbk64.cepack` / `dbk32.cepack` (the kernel driver). CE unpacks these to `dbk64.sys` / `dbk32.sys` on first run — requires Administrator.
 
@@ -51,7 +52,7 @@ lazbuild.exe --build-mode="Release 64-Bit" "Cheat Engine\cheatengine.lpi"
 
 ```
 patches/
-  autoassembler.patch      ← the only source change (394-line diff against CE 7.5 HEAD)
+  autoassembler.patch      ← 499-line diff across autoassembler.pas + SynHighlighterAA.pas
 
 installer/
   CE_Frankenstein.iss      ← Inno Setup 6 script; produces the setup EXE
@@ -61,6 +62,9 @@ extensions/
     extensions_loader.lua  ← loads plugins from Extensions\ on startup
   Extensions/
     AITools/               ← AI scripting panel (configure endpoint in aibase.lua)
+
+examples/
+  frankenstein_example.CEA ← complete AA script demonstrating all four new commands
 ```
 
 ---
