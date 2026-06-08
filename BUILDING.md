@@ -26,8 +26,8 @@ git apply ..\CE-Frankenstein\patches\autoassembler.patch
 
 Verify it applied cleanly:
 ```powershell
-git diff --stat HEAD
-# Should show: Cheat Engine/autoassembler.pas | ~394 lines changed
+git diff --stat
+# Should show two files: autoassembler.pas (~450 lines) + SynHighlighterAA.pas (~50 lines)
 ```
 
 ---
@@ -46,12 +46,11 @@ Copy-Item extensions\Extensions\AITools "cheat-engine\Cheat Engine\bin\Extension
 
 ```powershell
 $lazbuild = "C:\lazarus\lazbuild.exe"   # adjust to your Lazarus path
-cd "cheat-engine"
-& $lazbuild --build-mode="Release 64-Bit" "Cheat Engine\cheatengine.lpi"
+& $lazbuild --build-mode="Release 64-Bit" "cheat-engine\Cheat Engine\cheatengine.lpi"
 ```
 
 Expected output: `420228 lines compiled, 0.0 sec, ... 0 error(s)`.  
-Output binary: `Cheat Engine\bin\cheatengine-x86_64.exe`
+Output binary: `cheat-engine\Cheat Engine\bin\cheatengine-x86_64.exe`
 
 ---
 
@@ -118,17 +117,16 @@ Once built, `cepack -c infile outfile` compresses, `cepack -x infile outfile` ex
 First copy the ISS script from the Frankenstein repo into your CE source root:
 
 ```powershell
-Copy-Item "..\CE-Frankenstein\installer\CE_Frankenstein.iss" "cheat-engine\" -Force
+Copy-Item "CE-Frankenstein\installer\CE_Frankenstein.iss" "cheat-engine\" -Force
 ```
 
 Then build:
 
 ```powershell
-cd "cheat-engine"
-& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "CE_Frankenstein.iss"
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "cheat-engine\CE_Frankenstein.iss"
 ```
 
-Output: `installer_output\CheatEngine_Frankenstein_Setup.exe` (created next to the ISS file).
+Output: `cheat-engine\installer_output\CheatEngine_Frankenstein_Setup.exe`.
 
 ---
 

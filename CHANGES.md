@@ -104,15 +104,7 @@ Must be called with the same `address` as the matching `HOOK()`.
 {$endif}
 ```
 
-**Also supported:** `{$else}` — flips the active/skip state at the current nesting level, with a correct outer-skip guard so nested blocks don't interfere.
-
-```
-{$ifdef CPU64}
-  jmp far myHook64
-{$else}
-  jmp myHook32
-{$endif}
-```
+`{$else}` flips the active/skip state at the current nesting level with a correct outer-skip guard, so nested blocks don't interfere.
 
 **Implementation**  
 `processAAIfdefBlocks(code, is64bit)` runs as a pre-pass before AOB scans. It blanks out excluded lines in-place (sets them to `''`) so the rest of the assembler sees a clean linear script. `{$else}` is handled by checking `nskip - ord(skipStack[skipDepth]) = 0` before flipping, ensuring outer skips are not disturbed.
