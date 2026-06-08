@@ -1,5 +1,88 @@
+diff --git a/Cheat Engine/SynHighlighterAA.pas b/Cheat Engine/SynHighlighterAA.pas
+index 257458a7..300cfe9b 100755
+--- a/Cheat Engine/SynHighlighterAA.pas	
++++ b/Cheat Engine/SynHighlighterAA.pas	
+@@ -319,6 +319,7 @@ type
+     function Func45: TtkTokenKind;
+     function Func46: TtkTokenKind; //resd
+     function Func47: TtkTokenKind; //spl
++    function Func49: TtkTokenKind; //hook
+     function Func50: TtkTokenKind; //xmm0-15
+     function Func52: TtkTokenKind; //dealloc / disable
+     function Func53: TtkTokenKind; //rsp
+@@ -330,7 +331,7 @@ type
+     function Func68: TtkTokenKind; //include
+     function Func81: TtkTokenKind; //allocnx
+     function Func82: TtkTokenKind; //assert //allocxo
+-    function Func84: TtkTokenKind; //aobscanex
++    function Func84: TtkTokenKind; //aobscanex/unhook
+     function Func92: TtkTokenKind; //globalalloc
+     function Func99: TtkTokenKind; //reassemble
+     function Func101: TtkTokenKind; //fullaccess/loadbinary/struct
+@@ -339,6 +340,7 @@ type
+     function Func123: TtkTokenKind; //aobscanregion
+     function Func124: TtkTokenKind; //endstruct
+     function Func125: TtkTokenKind; //aobscanmodule
++    function Func157: TtkTokenKind; //aobscanfunction
+     function Func180: TtkTokenKind; //createthreadandwait
+     function Func187: TtkTokenKind; //registersymbol
+     function Func222: TtkTokenKind; //unregistersymbol
+@@ -613,6 +615,7 @@ begin
+   fIdentFuncTable[45] := {$IFDEF FPC}@{$ENDIF}Func45;
+   fIdentFuncTable[46] := {$IFDEF FPC}@{$ENDIF}Func46;
+   fIdentFuncTable[47] := {$IFDEF FPC}@{$ENDIF}Func47;
++  fIdentFuncTable[49] := {$IFDEF FPC}@{$ENDIF}Func49;
+   fIdentFuncTable[50] := {$IFDEF FPC}@{$ENDIF}Func50;
+   fIdentFuncTable[52] := {$IFDEF FPC}@{$ENDIF}Func52;
+   fIdentFuncTable[53] := {$IFDEF FPC}@{$ENDIF}Func53;
+@@ -633,6 +636,7 @@ begin
+   fIdentFuncTable[123] := {$IFDEF FPC}@{$ENDIF}Func123;
+   fIdentFuncTable[124] := {$IFDEF FPC}@{$ENDIF}Func124;
+   fIdentFuncTable[125] := {$IFDEF FPC}@{$ENDIF}Func125;
++  fIdentFuncTable[157] := {$IFDEF FPC}@{$ENDIF}Func157;
+   fIdentFuncTable[180] := {$IFDEF FPC}@{$ENDIF}Func180;
+   fIdentFuncTable[187] := {$IFDEF FPC}@{$ENDIF}Func187;
+   fIdentFuncTable[222] := {$IFDEF FPC}@{$ENDIF}Func222;
+@@ -959,6 +963,12 @@ begin
+     Result := tkIdentifier;
+ end;
+ 
++function TSynAASyn.Func49: TtkTokenKind; //hook
++begin
++  if KeyComp('hook') then Result := tkKey else
++    Result := tkIdentifier;
++end;
++
+ function TSynAASyn.Func50: TtkTokenKind; //xmm0
+ begin
+   if KeyComp('xmm0') then Result := tkRegister else
+@@ -1049,9 +1059,10 @@ begin
+       Result := tkIdentifier;
+ end;
+ 
+-function TSynAASyn.Func84: TtkTokenKind; //aobscanex
++function TSynAASyn.Func84: TtkTokenKind; //aobscanex/unhook
+ begin
+   if KeyComp('aobscanex') then Result := tkKey else
++  if KeyComp('unhook') then Result := tkKey else
+     Result := tkIdentifier;
+ end;
+ 
+@@ -1105,6 +1116,12 @@ begin
+     Result := tkIdentifier;
+ end;
+ 
++function TSynAASyn.Func157: TtkTokenKind; //aobscanfunction
++begin
++  if KeyComp('aobscanfunction') then Result := tkKey else
++    Result := tkIdentifier;
++end;
++
+ function TSynAASyn.Func180: TtkTokenKind; //createthreadandwait
+ begin
+   if KeyComp('createthreadandwait') then Result := tkKey else
 diff --git a/Cheat Engine/autoassembler.pas b/Cheat Engine/autoassembler.pas
-index e94bbd6b..7d3ace1c 100755
+index e94bbd6b..60310a6a 100755
 --- a/Cheat Engine/autoassembler.pas	
 +++ b/Cheat Engine/autoassembler.pas	
 @@ -1263,6 +1263,60 @@ begin
@@ -24,9 +107,9 @@ index e94bbd6b..7d3ace1c 100755
 +        if (not syntaxcheckonly) then
 +        begin
 +          startaddress:=symhandler.getAddressFromName(s2);
-+          // Scan a window around the function start.
-+          // 65536 bytes is a conservative upper bound for most functions.
-+          stopaddress:=startaddress + 65536;
++          // Scan a window: 256 bytes before (catches prologues/callers) to 65536 after.
++          if startaddress > 256 then dec(startaddress, 256);
++          stopaddress:=startaddress + 65536 + 256;
 +
 +          m:=-1;
 +          for j:=0 to length(aobscanmodules)-1 do
@@ -63,7 +146,7 @@ index e94bbd6b..7d3ace1c 100755
    end;
    //do simultaneous scans for the selected modules
  
-@@ -1496,6 +1550,132 @@ end;
+@@ -1496,6 +1550,154 @@ end;
  
  var nextaaid: longint;
  
@@ -143,6 +226,28 @@ index e94bbd6b..7d3ace1c 100755
 +        continue;
 +      end;
 +
++      if currentline = '{$ELSE}' then
++      begin
++        code[i] := '';
++        if skipDepth > 0 then
++        begin
++          // Only flip if no outer level is causing the skip
++          if nskip - ord(skipStack[skipDepth]) = 0 then
++          begin
++            if skipStack[skipDepth] then
++            begin
++              skipStack[skipDepth] := false;
++              dec(nskip);
++            end else begin
++              skipStack[skipDepth] := true;
++              inc(nskip);
++            end;
++          end;
++        end;
++        inc(i);
++        continue;
++      end;
++
 +      if copy(currentline, 1, 8) = '{$IFDEF ' then
 +      begin
 +        if skipDepth < MAXNEST-1 then
@@ -196,7 +301,7 @@ index e94bbd6b..7d3ace1c 100755
  function autoassemble2(code: tstrings;popupmessages: boolean;syntaxcheckonly:boolean; targetself: boolean; disableinfo: TDisableInfo=nil; memrec: TMemoryRecord=nil):boolean;
  {
  registeredsymbols is a stringlist that is initialized by the caller as case insensitive and no duplicates
-@@ -1598,6 +1778,8 @@ var i: integer=0;
+@@ -1598,6 +1800,8 @@ var i: integer=0;
      varsize: integer=0;
      tokens: tstringlist=nil;
      baseaddress: ptrUint=0;
@@ -205,7 +310,7 @@ index e94bbd6b..7d3ace1c 100755
  
      multilineinjection: tstringlist=nil;
      include: tstringlist=nil;
-@@ -1937,6 +2119,8 @@ begin
+@@ -1937,6 +2141,8 @@ begin
      removecomments(code);  //also trims each line
      unlabeledlabels(code);
  
@@ -214,7 +319,7 @@ index e94bbd6b..7d3ace1c 100755
      if not strictmode then
        getPotentialLabels(code, potentiallabels);
  
-@@ -2843,6 +3027,177 @@ begin
+@@ -2843,6 +3049,177 @@ begin
            end;
  
  
