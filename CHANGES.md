@@ -1,7 +1,7 @@
 # Changes from CE 7.5 Public Source
 
-All changes are in a single file: `Cheat Engine/autoassembler.pas`.  
-Patch: `patches/autoassembler.patch` (394 lines, applies cleanly against CE 7.5 HEAD `ec45d5f4`).
+Changes span two files: `Cheat Engine/autoassembler.pas` and `Cheat Engine/SynHighlighterAA.pas`.  
+Patch: `patches/autoassembler.patch` (499 lines, applies cleanly against CE 7.5 HEAD `ec45d5f4`).
 
 ---
 
@@ -104,8 +104,18 @@ Must be called with the same `address` as the matching `HOOK()`.
 {$endif}
 ```
 
+**Also supported:** `{$else}` — flips the active/skip state at the current nesting level, with a correct outer-skip guard so nested blocks don't interfere.
+
+```
+{$ifdef CPU64}
+  jmp far myHook64
+{$else}
+  jmp myHook32
+{$endif}
+```
+
 **Implementation**  
-`processAAIfdefBlocks(code, is64bit)` runs as a pre-pass before AOB scans. It blanks out excluded lines in-place (sets them to `''`) so the rest of the assembler sees a clean linear script.
+`processAAIfdefBlocks(code, is64bit)` runs as a pre-pass before AOB scans. It blanks out excluded lines in-place (sets them to `''`) so the rest of the assembler sees a clean linear script. `{$else}` is handled by checking `nskip - ord(skipStack[skipDepth]) = 0` before flipping, ensuring outer skips are not disturbed.
 
 ---
 
@@ -116,7 +126,7 @@ Must be called with the same `address` as the matching `HOOK()`.
 AOBSCANFUNCTION(name, functionname, aob)
 ```
 
-Scans for `aob` within a ±64 KB window around the address of `functionname` (resolved via the symbol handler). Equivalent to:
+Scans for `aob` within a window starting 256 bytes before `functionname` and ending 65 KB after it (resolved via the symbol handler). Equivalent to:
 ```
 aobscanmodule(name, <module containing functionname>, aob)
 ```
@@ -135,7 +145,8 @@ AOBSCANFUNCTION(myPattern, MyGameFunction, 48 8B 05 ?? ?? ?? ??)
 
 | File | Change |
 |---|---|
-| `Cheat Engine/autoassembler.pas` | All new AA commands |
+| `Cheat Engine/autoassembler.pas` | All new AA commands + `{$else}` + AOBSCANFUNCTION scan bounds |
+| `Cheat Engine/SynHighlighterAA.pas` | Syntax highlighting for HOOK, UNHOOK, AOBSCANFUNCTION |
 
 ### New types / globals added (unit level)
 
@@ -163,3 +174,36 @@ var
 ### Varsize reuse issue
 
 Inside `HOOK()`, `varsize` is first set to jmpsize (14 or 5), then overwritten with `length(origcodename)` for alloc-list sort ordering. The saved jmpsize is captured into `diff: ptruint` immediately after assignment and used for NOP-padding logic.
+
+---
+
+## Post-release fixes (v2)
+
+### Fix 1 — `{$else}` support
+
+`{$else}` was missing from `processAAIfdefBlocks` entirely. Scripts using the common `{$ifdef CPU64} … {$else} … {$endif}` pattern would silently execute both branches.
+
+**Fix:** Added `{$else}` handling with an outer-skip guard:
+```pascal
+if nskip - ord(skipStack[skipDepth]) = 0 then
+  // flip skipStack[skipDepth] and adjust nskip
+```
+This ensures `{$else}` only flips the current level's skip state when no outer block is already causing a skip.
+
+### Fix 2 — AOBSCANFUNCTION scan lower bound
+
+The original window was `startaddress` to `startaddress + 65536`, starting exactly at the symbol address. Patterns in function prologues (which compilers often emit a few bytes before the nominal symbol entry) would be missed.
+
+**Fix:** Window is now `startaddress - 256` (guarded against underflow) to `startaddress + 65792`, giving a small back-margin while keeping the forward range identical.
+
+### Fix 3 — Syntax highlighting for new keywords
+
+`HOOK`, `UNHOOK`, and `AOBSCANFUNCTION` displayed as plain identifiers in the AA editor. Added to `SynHighlighterAA.pas` using the existing hash-dispatch table:
+
+| Keyword | Hash | Slot |
+|---|---|---|
+| `hook` | 49 | New `Func49` |
+| `unhook` | 84 | Added to existing `Func84` (shared with `aobscanex`) |
+| `aobscanfunction` | 157 | New `Func157` |
+
+`{$ifdef}` / `{$else}` / `{$endif}` directives are already rendered as block comments by the highlighter (CE uses `{…}` Pascal comment syntax), which visually distinguishes them from code without additional changes.
