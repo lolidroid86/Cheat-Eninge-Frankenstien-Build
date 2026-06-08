@@ -18,8 +18,11 @@ Download Lazarus 2.2.2 with FPC 3.2.2: https://sourceforge.net/projects/lazarus/
 ```powershell
 git clone https://github.com/cheat-engine/cheat-engine.git
 cd cheat-engine
-git apply patches\autoassembler.patch
+git checkout ec45d5f4          # pin to the exact CE 7.5 commit the patch targets
+git apply ..\CE-Frankenstein\patches\autoassembler.patch
 ```
+
+> If you cloned the Frankenstein repo to a different location, adjust the `..` path accordingly.
 
 Verify it applied cleanly:
 ```powershell
@@ -112,12 +115,20 @@ Once built, `cepack -c infile outfile` compresses, `cepack -x infile outfile` ex
 
 ## Step 5 — Build the installer
 
+First copy the ISS script from the Frankenstein repo into your CE source root:
+
 ```powershell
-cd "cheat-engine"
-& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\CE_Frankenstein.iss"
+Copy-Item "..\CE-Frankenstein\installer\CE_Frankenstein.iss" "cheat-engine\" -Force
 ```
 
-Output: `C:\claude\installer_output\CheatEngine_Frankenstein_Setup.exe`
+Then build:
+
+```powershell
+cd "cheat-engine"
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "CE_Frankenstein.iss"
+```
+
+Output: `installer_output\CheatEngine_Frankenstein_Setup.exe` (created next to the ISS file).
 
 ---
 
