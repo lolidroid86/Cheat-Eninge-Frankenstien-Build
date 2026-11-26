@@ -19,3 +19,7 @@ lib/
 # OS
 .DS_Store
 Thumbs.db
+
+# v3 build output / CE 7.7.x binaries - never commit
+installer/stage/
+installer/installer_output/

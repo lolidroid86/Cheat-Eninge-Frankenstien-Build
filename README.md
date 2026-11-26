@@ -1,6 +1,8 @@
 # Cheat Engine Frankenstein
 
-A custom build of **Cheat Engine 7.5** (public source) with four Auto-Assembler commands backported from CE 7.6.3/7.7, plus the AITools extension pre-wired.
+A custom build of **Cheat Engine 7.5** (public source) with four Auto-Assembler commands backported from CE 7.6.3/7.7.
+
+**v3 (2026-11-26):** the build now runs on the full **CE 7.7.3** support-file set, with a Lua compatibility layer ([`compat/00_frankenstein_compat.lua`](compat/00_frankenstein_compat.lua)) that adds the CE 7.6/7.7 Lua functions the 7.5 EXE lacks. The 7.7.3 scripts start with no errors. See [CHANGES.md](CHANGES.md) for the function list.
 
 ---
 
@@ -19,7 +21,9 @@ See [CHANGES.md](CHANGES.md) for full syntax, examples, and implementation notes
 
 ### AITools Extension
 
-`autorun/extensions_loader.lua` + `Extensions/AITools/` are pre-included. AITools adds an AI-assisted scripting panel inside CE. Configure your endpoint in `Extensions/AITools/aibase.lua`.
+`autorun/extensions_loader.lua` + `Extensions/AITools/` are included for the original (v2) build. AITools adds an AI-assisted scripting panel inside CE.
+
+> **Status:** AITools is written for CE 7.7 and calls functions the 7.5 EXE does not have (including `getCEPatreonSessionID()`), so it does **not** load cleanly on Frankenstein. The v3 build does not include the Extensions loader. If you want AITools, use an official CE 7.7.x build. Making it work here with your own API key (AITools supports custom OpenAI/Anthropic/Gemini endpoints) would need more shims; contributions welcome.
 
 ---
 
@@ -55,7 +59,11 @@ patches/
   autoassembler.patch      ← 499-line diff across autoassembler.pas + SynHighlighterAA.pas
 
 installer/
-  CE_Frankenstein.iss      ← Inno Setup 6 script; produces the setup EXE
+  CE_Frankenstein.iss      ← Inno Setup 6 script (v2, hand-picked CE 7.7 files)
+  CE_Frankenstein_773.iss  ← v3 script: packs the whole installer\stage folder
+
+compat/
+  00_frankenstein_compat.lua ← v3 Lua layer: CE 7.6/7.7 functions missing from 7.5
 
 extensions/
   autorun/
@@ -119,6 +127,7 @@ See [`examples/frankenstein_example.CEA`](examples/frankenstein_example.CEA) for
 |---|---|
 | [lolidroid86](https://github.com/lolidroid86) | Project lead — concept, testing, CE 7.7 driver sourcing, build verification |
 | [Claude Sonnet 4.6](https://claude.ai) (Anthropic) | Implementation — AA command backports, installer script, documentation |
+| [Claude Opus 5.5](https://claude.ai) (Anthropic) | v3 — CE 7.7.3 support-file build, Lua compatibility layer, testing |
 
 ---
 

@@ -5,6 +5,39 @@ Patch: `patches/autoassembler.patch` (499 lines, applies cleanly against CE 7.5 
 
 ---
 
+## v3 — CE 7.7.3 support files + Lua compatibility layer (2026-11-26)
+
+The patched 7.5 EXE is unchanged. What changed is everything around it:
+
+- **All support files now come from CE 7.7.3** (DLLs, drivers, `autorun` scripts, `lua`, `tcclib`, `plugins`, `include`, languages) instead of a hand-picked list from 7.7. See BUILDING.md → "v3".
+- **`compat/00_frankenstein_compat.lua`** loads before the 7.7.3 `autorun` scripts (CE 7.5 loads `autorun\*.lua` alphabetically) and defines CE 7.6/7.7 Lua functions that the 7.5 EXE lacks. Every definition is guarded, so it never replaces a real function.
+- **`pseudocodediagram.lua`** needs a one-line fix (BUILDING.md, v3 step 5).
+
+Result: the 7.7.3 script set starts with **0 error dialogs** (it was 4 without the layer), and 23/23 self-tests passed inside CE.
+
+| 7.7 function | Frankenstein implementation |
+|---|---|
+| `CheckSynchronize`, `CreateMenuItem`, `InputQuery`, `MessageDialog` | Aliases of the 7.5 lowercase names |
+| `InjectLibrary(path, skipsymbols)` | Wraps `injectLibrary`; returns `true` or `false, error` |
+| `printf(fmt, ...)` | `print(string.format(...))` |
+| `getSystemArchitecture()` | `1` on 64-bit CE, else `0` |
+| `isAdmin()` | Calls `shell32.IsUserAnAdmin` |
+| `dbk_initialized()` / `dbvm_initialized()` | Flags set by wrapped `dbk_initialize` / `dbvm_initialize` |
+| `getTimeStamp()` | `HH:MM:SS.mmm` |
+| `getCurrentThreadObject()` | `{Name='Main Thread'}` on the main thread, else `nil` |
+| `getProcessAge()` | `nil` (unknown in 7.5; callers treat it as "old enough") |
+| `getMemoryRegionInfo(addr)` / `getMemoryProtection(addr)` | Built on `enumMemoryRegions`; protection as `{r,w,x}` |
+| `isPaused()` | Flag set by wrapped `pause` / `unpause` |
+| `loadNewSymbols()` | `reinitializeSymbolhandler(false)` |
+| `mono_log(...)` | Forwards to `monolog` |
+| `forEachAndFutureForm(class, fn)` | Same as 7.7.3's `forEachForm.lua`; defined early so `dmahelper.lua` can use it |
+| `createSettingsOption` / `getSettingsOption` / `setSettingsOption` | Stored in the registry: `HKCU\Software\Cheat Engine\Frankenstein\Options` (no settings-window UI) |
+| `createTableOption` / `getTableOption` / `setTableOption` | Stored inside the cheat table as a hidden table file `FrankensteinTableOptions` |
+
+**Not covered** (these 7.7 features need engine changes that are not in the public source): the DMA/CR3 helper functions used by `dmahelper.lua`, TCP/Wine socket bridges, `.NET` library injection (`injectDotNetLibrary`), and the Patreon session (`getCEPatreonSessionID`). The scripts that need them still load; only those features stay unavailable.
+
+---
+
 ## 1. `HOOK(address, destination, origcodename)`
 
 **Syntax**

@@ -130,6 +130,50 @@ Output: `cheat-engine\installer_output\CheatEngine_Frankenstein_Setup.exe`.
 
 ---
 
+## v3: Build on the CE 7.7.3 support files (recommended)
+
+v3 keeps the same patched 7.5 EXE from Steps 1–3 but takes **every other file** from a CE 7.7.3 install, and adds a Lua compatibility layer so the 7.7.3 scripts start without errors. You need your own CE 7.7.3 installer (`CheatEngine773P.exe`).
+
+```powershell
+# 1. Install CE 7.7.3 into a throwaway folder
+& .\CheatEngine773P.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="C:\temp\ce773"
+
+# 2. Build the stage folder next to the .iss (skip 7.7.3's own main EXEs, launcher and uninstaller)
+$stage = "CE-Frankenstein\installer\stage"
+robocopy C:\temp\ce773 $stage /E /XF cheatengine-x86_64.exe cheatengine-x86_64.exe.sig `
+  cheatengine-x86_64-SSE4-AVX2.exe cheatengine-x86_64-SSE4-AVX2.exe.sig `
+  cheatengine-i386.exe cheatengine-i386.exe.sig "Cheat Engine.exe" unins000.*
+
+# 3. Add the Frankenstein EXE (from Step 3) and the compatibility layer
+Copy-Item "cheat-engine\Cheat Engine\bin\cheatengine-x86_64.exe" $stage -Force
+Copy-Item "CE-Frankenstein\compat\00_frankenstein_compat.lua" "$stage\autorun\" -Force
+
+# 4. Optional: ceserver for Linux/Android targets
+# Expand-Archive ceserver773.zip "$stage\ceserver"
+```
+
+**5. One-line fix in `$stage\autorun\pseudocodediagram.lua`** (line ~1533). It anchors its menu entry to a 7.7-only menu item. Change:
+
+```lua
+mv.debuggerpopup.Items.insert(mv.miHighlightJumpDestinationInCurrentFunction.MenuIndex+1, miSpawnDiagram)
+```
+to:
+```lua
+mv.debuggerpopup.Items.insert((mv.miHighlightJumpDestinationInCurrentFunction or mv.miSelectCurrentFunction).MenuIndex+1, miSpawnDiagram)
+```
+
+**6. Build the installer:**
+```powershell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "CE-Frankenstein\installer\CE_Frankenstein_773.iss"
+```
+Output: `CE-Frankenstein\installer\installer_output\CheatEngine_Frankenstein_773_Setup.exe`.
+
+> Do not commit or share the `stage` folder or the built installer: they contain CE 7.7.3 binaries.
+
+A correct v3 build starts with **no** Lua error dialogs. If one appears, the 7.7.3 version you used calls another function the 7.5 EXE lacks; see the compatibility table in [CHANGES.md](CHANGES.md#v3--ce-773-support-files--lua-compatibility-layer-2026-11-26).
+
+---
+
 ## Verifying the build
 
 Open CE, attach to any process, and open the Auto-Assembler (Ctrl+Alt+A). Paste this test script:
